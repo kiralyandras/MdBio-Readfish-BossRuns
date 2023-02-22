@@ -254,15 +254,17 @@ def simple_analysis(
         unblock_batch_action_list = []
         stop_receiving_action_list = []
 
+        get_fn = functools.partial(deep_get, key="datasets.sequence", default="")
+
         raw_chunks = client.get_read_chunks(batch_size=batch_size, last=True)
         basecalled = caller.get_all_data(
             reads=raw_chunks, signal_dtype=client.signal_dtype
         )
-        alignments = mapper.map_reads(basecalled)
+        alignments = mapper.map_reads(basecalled, key=get_fn)
         for read_info, guppy_data, mappings in alignments:
             r += 1
             read_id = deep_get(guppy_data, "metadata.read_id")
-            seq_len = deep_get(guppy_data, "metadata.sequence_length", 0)
+            seq_len = deep_get(guppy_data, "metadata.sequence_length", default=0)
             read_start_time = timer()
             channel, read_number = read_info
             if read_number not in tracker[channel]:

@@ -24,7 +24,9 @@ if mappy is None:
 class Mapper:
     def __init__(self, index="", **kwargs):
         self.index = index
-        self.aligner = mp.Aligner(self.index, **kwargs)
+        self.aligner = mappy.Aligner(self.index, **kwargs)
+        if _mappy_rs:
+            self.aligner.enable_threading(1)
 
     @property
     def initialised(self):
@@ -45,13 +47,13 @@ class Mapper:
             for meta, data in _basecalls:
                 yield {"seq": _key(data), "meta": meta, "basecall": data}
 
-        sent = self.aligner.map_batch(_gen(basecalls, key))
-        # Some check here
-        while recv < len(sent):
-            results = self.aligner.get_completed()
-            for mappings, sent_data in results:
-                yield sent_data["meta"], sent_data["basecall"], mappings
-                recv += 1
+        recv = self.aligner.map_batch(_gen(basecalls, key))
+        for mappings, sent_data in recv:
+            yield sent_data["meta"], sent_data["basecall"], mappings
+
+    @property
+    def mapper(self):
+        return self.aligner
 
 
 
