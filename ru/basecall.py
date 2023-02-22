@@ -40,7 +40,7 @@ class GuppyCaller(PyGuppyClient):
         self.set_params({"priority": PyGuppyClient.high_priority})
         self.connect()
 
-    def _basecall(self, reads, signal_dtype, decided_reads, daq_values=None):
+    def _basecall(self, reads, signal_dtype, daq_values=None):
         """Guppy basecaller wrapper for MinKNOW RPC reads
 
         Parameters
@@ -49,8 +49,6 @@ class GuppyCaller(PyGuppyClient):
             List or generator of tuples containing (channel, MinKNOW.rpc.Read)
         signal_dtype
             Numpy dtype of the raw data
-        decided_reads : Dict[int: str]
-            Dictionary of channels with the last read id a decision was made for
         daq_values : Dict[int: namedtuple]
             Dictionary of channels with namedtuples containing offset and scaling.
             If not provided default values of 1.0 and 0.0 are used

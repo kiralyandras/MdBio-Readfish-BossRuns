@@ -3,7 +3,7 @@ functions and utilities used internally.
 """
 import logging
 from collections import namedtuple, defaultdict
-from functools import lru_cache
+from functools import lru_cache, reduce
 from pathlib import Path
 from random import random
 import numpy as np
@@ -925,6 +925,20 @@ def get_device(device, host="127.0.0.1", port=None):
         if position.name == device:
             return position
     raise ValueError("Could not find device {!r}".format(device))
+
+
+def deep_get(dictionary, key, delim=".", default=None):
+    """
+    >>> deep_get({"a": {"b": {"c": 99}}}, "a.b.c")
+    99
+    >>> deep_get({"a": {"b": {"d": 99}}}, "a.b.c")
+    None
+    """
+    return reduce(
+        lambda d, k: d.get(k, default) if isinstance(d, dict) else default,
+        key.split(delim),
+        dictionary,
+    )
 
 
 if __name__ == "__main__":

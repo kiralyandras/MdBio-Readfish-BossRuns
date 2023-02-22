@@ -16,14 +16,15 @@ from ru.read_until_client import RUClient
 from read_until.read_cache import AccumulatingCache
 import toml
 
+from ru._alignment import Mapper
 from ru.arguments import BASE_ARGS
-from ru.basecall import Mapper as CustomMapper
 from ru.basecall import GuppyCaller as Caller
 from ru.utils import (
     print_args,
     get_run_info,
     between,
     setup_logger,
+    deep_get,
     describe_experiment,
 )
 from ru.utils import send_message, Severity, get_device, DecisionTracker
@@ -230,7 +231,7 @@ def simple_analysis(
                 )
 
                 # Update mapper client.
-                mapper = CustomMapper(new_reference)
+                mapper = Mapper(new_reference)
                 # Log on success
                 logger.info("Reloaded mapper")
 
@@ -253,14 +254,15 @@ def simple_analysis(
         unblock_batch_action_list = []
         stop_receiving_action_list = []
 
-        for read_info, read_id, seq_len, results in mapper.map_reads_2(
-            caller.basecall_minknow(
-                reads=client.get_read_chunks(batch_size=batch_size, last=True),
-                signal_dtype=client.signal_dtype,
-                decided_reads=decided_reads,
-            )
-        ):
+        raw_chunks = client.get_read_chunks(batch_size=batch_size, last=True)
+        basecalled = caller.get_all_data(
+            reads=raw_chunks, signal_dtype=client.signal_dtype
+        )
+        alignments = mapper.map_reads(basecalled)
+        for read_info, guppy_data, mappings in alignments:
             r += 1
+            read_id = deep_get(guppy_data, "metadata.read_id")
+            seq_len = deep_get(guppy_data, "metadata.sequence_length", 0)
             read_start_time = timer()
             channel, read_number = read_info
             if read_number not in tracker[channel]:
@@ -312,11 +314,11 @@ def simple_analysis(
                 exceeded_threshold = True
 
             # No mappings
-            if not results:
+            if not mappings:
                 mode = "no_map"
 
             hits = set()
-            for result in results:
+            for result in mappings:
                 pf.debug("{}\t{}\t{}".format(read_id, seq_len, result))
                 hits.add(result.ctg)
 
@@ -324,7 +326,7 @@ def simple_analysis(
                 # Mappings and targets overlap
                 coord_match = any(
                     between(r.r_st, c)
-                    for r in results
+                    for r in mappings
                     for c in conditions[run_info[channel]]
                     .coords.get(strand_converter.get(r.strand), {})
                     .get(r.ctg, [])
@@ -458,7 +460,7 @@ def run(parser, args):
 
     # Load Minimap2 index
     logger.info("Initialising minimap2 mapper")
-    mapper = CustomMapper(reference)
+    mapper = Mapper(reference)
     logger.info("Mapper initialised")
 
     position = get_device(args.device, host=args.host, port=args.port)
