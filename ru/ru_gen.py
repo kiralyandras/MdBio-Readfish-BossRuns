@@ -29,6 +29,7 @@ from ru.utils import (
 )
 from ru.utils import send_message, Severity, get_device, DecisionTracker
 
+ACTIONS = ("stop_receiving", "unblock", "proceed")
 
 _help = "Run targeted sequencing"
 _cli = BASE_ARGS + (
@@ -52,6 +53,28 @@ _cli = BASE_ARGS + (
         dict(
             help="Chunk log",
             default=None,
+        ),
+    ),
+    (
+        "--exceeded-max-chunks-action",
+        dict(
+            help=(
+                "Experimental. Action to take when a read is evaluated more "
+                "than the `max_chunks` TOML parameter (default: unblock)"
+            ),
+            choices=ACTIONS,
+            default="unblock",
+        ),
+    ),
+    (
+        "--below-min-chunks-action",
+        dict(
+            help=(
+                "Experimental. Action to take when a read has not reached the "
+                "`min_chunks` TOML parameter (default: proceed)"
+            ),
+            choices=ACTIONS,
+            default="proceed",
         ),
     ),
 )
@@ -90,6 +113,8 @@ def simple_analysis(
     conditions=None,
     mapper=None,
     caller_kwargs=None,
+    exceeded_max_chunks_action="unblock",
+    below_min_chunks_action="proceed",
 ):
     """Analysis function
 
@@ -365,9 +390,12 @@ def simple_analysis(
 
             # If max_chunks has been exceeded AND we don't want to keep sequencing we unblock
             if exceeded_threshold and decision_str != "stop_receiving":
-                mode = "exceeded_max_chunks_unblocked"
-                decisiontracker.event_seen(mode)
-                unblock_batch_action_list.append((channel, read_number, read_id))
+                mode = f"exceeded_max_chunks_{exceeded_max_chunks_action}"
+                # decisiontracker.event_seen(mode)
+                if below_min_chunks_action == "unblock":
+                    unblock_batch_action_list.append((channel, read_number, read_id))
+                elif below_min_chunks_action == "stop_receiving":
+                    stop_receiving_action_list.append((channel, read_number, read_id))
 
             # TODO: WHAT IS GOING ON?!
             #  I think that this needs to change between enrichment and depletion
@@ -379,15 +407,18 @@ def simple_analysis(
                 "multi_on",
                 "multi_off",
             }:
-                mode = "below_min_chunks_unblocked"
-                unblock_batch_action_list.append((channel, read_number, read_id))
-                decisiontracker.event_seen(decision_str)
+                mode = f"below_min_chunks_{below_min_chunks_action}"
+                if below_min_chunks_action == "unblock":
+                    unblock_batch_action_list.append((channel, read_number, read_id))
+                elif below_min_chunks_action == "stop_receiving":
+                    stop_receiving_action_list.append((channel, read_number, read_id))
+                # decisiontracker.event_seen(decision_str)
 
             # proceed returns None, so we send no decision; otherwise unblock or stop_receiving
             elif decision is not None:
                 decided_reads[channel] = read_id
                 decision(channel, read_number)
-                decisiontracker.event_seen(decision_str)
+                # decisiontracker.event_seen(decision_str)
 
             log_decision()
 
@@ -521,6 +552,8 @@ def run(parser, args):
             conditions=conditions,
             mapper=mapper,
             caller_kwargs=caller_kwargs,
+            exceeded_max_chunks_action=args.exceeded_max_chunks_action,
+            below_min_chunks_action=args.below_min_chunks_action,
         )
     except KeyboardInterrupt:
         pass
