@@ -56,6 +56,17 @@ _cli = BASE_ARGS + (
         ),
     ),
     (
+        "--mapping-threads",
+        dict(
+            help=(
+                "Experimental. Number of threads to use for alignment, only "
+                "available if using `mappy-rs`. (default: 1)"
+            ),
+            default=1,
+            type=int,
+        ),
+    ),
+    (
         "--exceeded-max-chunks-action",
         dict(
             help=(
@@ -235,7 +246,9 @@ def simple_analysis(
     l_string = "\t".join(("{}" for _ in CHUNK_LOG_FIELDS))
     loop_counter = 0
     while client.is_running:
+        logger.debug("Client is running")
         if not client.is_phase_sequencing:
+            logger.debug("Waiting for sequencing")
             time.sleep(5)
             continue
         if live_toml_path.is_file():
@@ -270,6 +283,7 @@ def simple_analysis(
         # TODO: Fix the logging to just one of the two in use
 
         if not mapper.initialised:
+            logger.debug("Mapper not initialised")
             time.sleep(throttle)
             continue
 
@@ -282,6 +296,7 @@ def simple_analysis(
         get_fn = functools.partial(deep_get, key="datasets.sequence", default="")
 
         raw_chunks = client.get_read_chunks(batch_size=batch_size, last=True)
+        logger.debug(f"Got {len(raw_chunks):,} raw chunks of data.")
         basecalled = caller.get_all_data(
             reads=raw_chunks, signal_dtype=client.signal_dtype
         )
@@ -433,17 +448,6 @@ def simple_analysis(
         if t0 + throttle > t1:
             time.sleep(throttle + t0 - t1)
 
-        if interval_checker + interval < t1:
-            interval_checker = t1
-            send_message(
-                client.connection,
-                "ReadFish Stats - accepted {:.2f}% of {} total reads. Unblocked {} reads.".format(
-                    decisiontracker.fetch_proportion_accepted(),
-                    decisiontracker.fetch_total_reads(),
-                    decisiontracker.fetch_unblocks(),
-                ),
-                Severity.INFO,
-            )
 
     else:
         send_message(client.connection, "ReadFish Client Stopped.", Severity.WARN)
@@ -484,17 +488,6 @@ def run(parser, args):
     logger.info(" ".join(sys.argv))
     print_args(args, logger=logger)
 
-    # Parse configuration TOML
-    # TODO: num_channels is not configurable here, should be inferred from client
-    run_info, conditions, reference, caller_kwargs = get_run_info(
-        args.toml, num_channels=512
-    )
-    live_toml = Path("{}_live".format(args.toml))
-
-    # Load Minimap2 index
-    logger.info("Initialising minimap2 mapper")
-    mapper = Mapper(reference)
-    logger.info("Mapper initialised")
 
     position = get_device(args.device, host=args.host, port=args.port)
 
@@ -504,6 +497,21 @@ def run(parser, args):
         filter_strands=True,
         cache_type=AccumulatingCache,
     )
+
+    # Parse configuration TOML
+    # TODO: num_channels is not configurable here, should be inferred from client
+    run_info, conditions, reference, caller_kwargs = get_run_info(
+        args.toml, num_channels=read_until_client.channel_count
+    )
+    live_toml = Path("{}_live".format(args.toml))
+
+    # Load Minimap2 index
+    logger.info(f"Initialising minimap2 mapper: {reference!r}")
+    mapper = Mapper(reference)
+    if mapper.has_multithreading:
+        mapper.enable_threading(args.mapping_threads)
+        logger.info(f"Set {args.mapping_threads} on mapper")
+    logger.info("Mapper initialised")
 
     send_message(
         read_until_client.connection,
@@ -554,6 +562,7 @@ def run(parser, args):
             caller_kwargs=caller_kwargs,
             exceeded_max_chunks_action=args.exceeded_max_chunks_action,
             below_min_chunks_action=args.below_min_chunks_action,
+            flowcell_size=read_until_client.channel_count,
         )
     except KeyboardInterrupt:
         pass

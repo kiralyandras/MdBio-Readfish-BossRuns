@@ -10,12 +10,14 @@ from collections import namedtuple
 import mappy as mp
 import numpy as np
 
+from ru.utils import setup_logger
+
 from pyguppy_client_lib.pyclient import PyGuppyClient
 from pyguppy_client_lib.helper_functions import package_read
 
 __all__ = ["GuppyCaller"]
 
-logger = logging.getLogger("RU_basecaller")
+logger = setup_logger(__name__, "%(asctime)s %(name)s %(message)s", level=logging.INFO)
 CALIBRATION = namedtuple("calibration", "scaling offset")
 
 
@@ -72,6 +74,8 @@ class GuppyCaller(PyGuppyClient):
         if daq_values is None:
             daq_values = DefaultDAQValues()
 
+        logger.debug(f"Sending {len(reads):,} for basecalling")
+
         for channel, read in reads:
             read_id = f"RU-{read.id}"  # we do not modify read.id itself as this can result in persistence after this function finishes
             hold[read_id] = (channel, read.number)
@@ -96,6 +100,8 @@ class GuppyCaller(PyGuppyClient):
             if sleep_time > 0:
                 time.sleep(sleep_time)
 
+        logger.debug(f"Sent {len(hold):,} successfully and skipped {len(skipped):,}")
+
         while done < read_counter:
             results = self.get_completed_reads()
 
@@ -115,6 +121,7 @@ class GuppyCaller(PyGuppyClient):
                     r["metadata"]["read_id"] = r_id[3:]
                     yield i, r
                     done += 1
+        logger.debug(f"Received {done:,} basecalls")
 
     def get_all_data(self, *args, **kwargs):
         """basecall data from minknow
