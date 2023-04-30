@@ -6,7 +6,7 @@ protobuf
 rtoml==0.8.0
 jsonschema==4.9.1
 watchdog==2.1.9
-pandas==1.4.3
+pandas
 mappy==2.24
 biopython==1.76
 minknow_api
