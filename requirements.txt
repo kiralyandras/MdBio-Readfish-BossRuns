@@ -2,7 +2,7 @@ grpcio==1.48.0
 requests==2.28.1
 numpy==1.23.1
 google==3.0.0
-protobuf==4.21.4
+protobuf
 rtoml==0.8.0
 jsonschema==4.9.1
 watchdog==2.1.9
