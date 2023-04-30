@@ -49,10 +49,25 @@ pip install --upgrade pip
 
 # Install our ReadFish Software
 pip install git+https://github.com/nanoporetech/read_until_api@v3.0.0
-pip install git+https://github.com/LooseLab/readfish@guppy_6
+pip install git+https://github.com/kiralyandras/MdBio-Readfish-BossRuns@bossruns-v002-versions
 
-# Install ont_pyguppy_client_lib that matches your guppy server version. E.G.
-pip install ont_pyguppy_client_lib==4.0.11
+
+# Install ont_pyguppy_client_lib that matches your guppy server version. 
+
+apt list --installed ont-guppy* | tail -n 1 | cut -f2 -d' ' | cut -f1 -d'-' >guppy_version
+
+cat guppy_version
+
+pip install ont_pyguppy_client_lib==$(cat guppy_version)
+
+# Install natsort
+pip install natsort
+# Install scipy
+pip install scipy==1.8
+# Install numba
+pip install numba==0.54.1
+# Install toml
+pip install toml
 ```
 
 Usage
