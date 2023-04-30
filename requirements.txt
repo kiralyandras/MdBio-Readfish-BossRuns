@@ -9,4 +9,4 @@ watchdog==2.1.9
 pandas==1.4.3
 mappy==2.24
 biopython==1.76
-minknow_api==5.0.0.1
+minknow_api
